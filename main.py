@@ -85,21 +85,19 @@ def download_img(img_url: str) -> None:
 
 def generate_pdf(img_urls: List[str]) -> None:
     total = len(img_urls)
-    # print("start download all images")
-    # for i, img_url in enumerate(img_urls):
-    #     print(f'{i}/{total} {img_url}')
-    #     download_img(img_url)
+    print("start download all images")
+    for i, img_url in enumerate(img_urls):
+        print(f'{i}/{total} {img_url}')
+        download_img(img_url)
+    print("image download complete")
+    print("start merging pdf file")
     file_list = [
         os.path.join(CACHE_DIR, img_url.split("/")[-1]) for img_url in img_urls
     ]
-    # cover: ImageFile.ImageFile = Image.open(file_list[0])
     images: List[ImageFile.ImageFile] = []
     for img_path in file_list:
         print(img_path)
         images.append(Image.open(img_path).convert('RGB'))
-
-    # cover.save(OUT_PDF_PATH)
-    # images: List[ImageFile.ImageFile] = [ Image.open(img_path) for img_path in file_list ]
     images[0].save(
         OUT_PDF_PATH, resolution=100.0, save_all=True, append_images=images[1:]
     )
