@@ -1,12 +1,19 @@
+import os
 import json
 import requests
+from PIL import Image, ImageFile
 from requests import Response
 from bs4 import BeautifulSoup
-from bs4.element import ResultSet, Tag
 from typing import List, Dict, Any
+from bs4.element import ResultSet, Tag
+from urllib.request import urlretrieve
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 BASE_URL = "https://telegra.ph"
 RESULT_JSON_PATH = "./result.json"
+CACHE_DIR = "./cache"
+OUT_PDF_PATH = "./output.pdf"
 
 
 def write_to_file(file_path: str, data: str) -> None:
@@ -44,7 +51,7 @@ def parse_ph(ph: str) -> Dict[str, str | Any]:
         "article", {"class": "tl_article_content", "id": "_tl_editor"}
     )
     imgs: ResultSet[Tag] = article.find_all("img")
-    url_list: List[str] = [f'{BASE_URL}{img.attrs["src"].strip()}' for img in imgs]
+    img_url_list: List[str] = [f'{BASE_URL}{img.attrs["src"].strip()}' for img in imgs]
     p_tags: ResultSet[Tag] = article.select("p")
     origin_link: str
     for p in p_tags:
@@ -56,10 +63,46 @@ def parse_ph(ph: str) -> Dict[str, str | Any]:
         "author_href": author_href,
         "datetime_str": datetime_str,
         "date_str": date_str,
-        "url_list": url_list,
+        "img_url_list": img_url_list,
         "origin_link": origin_link,
     }
     return parsed_result
+
+
+def download_img(img_url: str) -> None:
+
+    def reporthook(a, b, c):
+        print("\rdownloading: %5.1f%%" % (a * b * 100.0 / c), end="")
+
+    file_name = img_url.split("/")[-1]
+    file_path = os.path.join(CACHE_DIR, file_name)
+    if os.path.isfile(file_path):
+        print(f"File {file_path} exists! skipped")
+        return
+    urlretrieve(img_url, file_path, reporthook=reporthook)
+    print()
+
+
+def generate_pdf(img_urls: List[str]) -> None:
+    total = len(img_urls)
+    # print("start download all images")
+    # for i, img_url in enumerate(img_urls):
+    #     print(f'{i}/{total} {img_url}')
+    #     download_img(img_url)
+    file_list = [
+        os.path.join(CACHE_DIR, img_url.split("/")[-1]) for img_url in img_urls
+    ]
+    # cover: ImageFile.ImageFile = Image.open(file_list[0])
+    images: List[ImageFile.ImageFile] = []
+    for img_path in file_list:
+        print(img_path)
+        images.append(Image.open(img_path).convert('RGB'))
+
+    # cover.save(OUT_PDF_PATH)
+    # images: List[ImageFile.ImageFile] = [ Image.open(img_path) for img_path in file_list ]
+    images[0].save(
+        OUT_PDF_PATH, resolution=100.0, save_all=True, append_images=images[1:]
+    )
 
 
 def main() -> None:
@@ -67,6 +110,7 @@ def main() -> None:
     write_to_file(
         RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
     )
+    generate_pdf(parsed_result["img_url_list"])
 
 
 if __name__ == "__main__":
