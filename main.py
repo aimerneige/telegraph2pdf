@@ -12,9 +12,10 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 BASE_URL = "https://telegra.ph"
 CACHE_DIR = "./cache"
+OUTPUT_DIR = "./output"
 PH_NAME = "ZZZero-1-08-19"
-RESULT_JSON_PATH = f"./{PH_NAME}.json"
-OUT_PDF_PATH = f"./{PH_NAME}.pdf"
+RESULT_JSON_PATH = f"{OUTPUT_DIR}/{PH_NAME}.json"
+OUT_PDF_PATH = f"{OUTPUT_DIR}/{PH_NAME}.pdf"
 
 
 def write_to_file(file_path: str, data: str) -> None:
