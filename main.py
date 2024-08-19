@@ -11,9 +11,10 @@ from urllib.request import urlretrieve
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 BASE_URL = "https://telegra.ph"
-RESULT_JSON_PATH = "./result.json"
 CACHE_DIR = "./cache"
-OUT_PDF_PATH = "./output.pdf"
+PH_NAME = "ZZZero-1-08-19"
+RESULT_JSON_PATH = f"./{PH_NAME}.json"
+OUT_PDF_PATH = f"./{PH_NAME}.pdf"
 
 
 def write_to_file(file_path: str, data: str) -> None:
@@ -104,7 +105,7 @@ def generate_pdf(img_urls: List[str]) -> None:
 
 
 def main() -> None:
-    parsed_result = parse_ph("Nukunuku-Mini-Holes-08-18")
+    parsed_result = parse_ph(PH_NAME)
     write_to_file(
         RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
     )
