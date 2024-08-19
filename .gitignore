@@ -1,4 +1,4 @@
 .venv/
-result.json
 cache/
+*.json
 *.pdf
