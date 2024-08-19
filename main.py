@@ -89,7 +89,7 @@ def generate_pdf(img_urls: List[str]) -> None:
     total = len(img_urls)
     print("start download all images")
     for i, img_url in enumerate(img_urls):
-        print(f'{i}/{total} {img_url}')
+        print(f"{i}/{total} {img_url}")
         download_img(img_url)
     print("image download complete")
     print("start merging pdf file")
@@ -99,10 +99,14 @@ def generate_pdf(img_urls: List[str]) -> None:
     images: List[ImageFile.ImageFile] = []
     for img_path in file_list:
         print(img_path)
-        images.append(Image.open(img_path).convert('RGB'))
+        images.append(Image.open(img_path).convert("RGB"))
     images[0].save(
         OUT_PDF_PATH, resolution=100.0, save_all=True, append_images=images[1:]
     )
+    clean_flag = input("Clean all cache? y/n")
+    if clean_flag.lower() == "y":
+        for img_path in file_list:
+            os.remove(img_path)
 
 
 def main() -> None:
@@ -115,9 +119,7 @@ def main() -> None:
         RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
     )
     generate_pdf(parsed_result["img_url_list"])
-    clean_flag = input("Clean all cache? y/n")
-    if clean_flag.lower() == "y":
-        os.remove(CACHE_DIR)
+
 
 if __name__ == "__main__":
     main()
