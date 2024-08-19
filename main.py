@@ -13,7 +13,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 BASE_URL = "https://telegra.ph"
 CACHE_DIR = "./cache"
 OUTPUT_DIR = "./output"
-PH_NAME = "ZZZero-1-08-19"
+PH_NAME = "Nukunuku-Mini-Holes-08-18-2"
 RESULT_JSON_PATH = f"{OUTPUT_DIR}/{PH_NAME}.json"
 OUT_PDF_PATH = f"{OUTPUT_DIR}/{PH_NAME}.pdf"
 
@@ -106,12 +106,16 @@ def generate_pdf(img_urls: List[str]) -> None:
 
 
 def main() -> None:
+    if not os.path.exists(CACHE_DIR):
+        os.mkdir(CACHE_DIR)
     parsed_result = parse_ph(PH_NAME)
     write_to_file(
         RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
     )
     generate_pdf(parsed_result["img_url_list"])
-
+    clean_flag = input("Clean all cache? y/n")
+    if clean_flag.lower() == "y":
+        os.remove(CACHE_DIR)
 
 if __name__ == "__main__":
     main()
