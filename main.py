@@ -108,6 +108,8 @@ def generate_pdf(img_urls: List[str]) -> None:
 def main() -> None:
     if not os.path.exists(CACHE_DIR):
         os.mkdir(CACHE_DIR)
+    if not os.path.exists(OUTPUT_DIR):
+        os.mkdir(OUTPUT_DIR)
     parsed_result = parse_ph(PH_NAME)
     write_to_file(
         RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
