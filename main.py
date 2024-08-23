@@ -114,10 +114,15 @@ def main() -> None:
         os.mkdir(CACHE_DIR)
     if not os.path.exists(OUTPUT_DIR):
         os.mkdir(OUTPUT_DIR)
-    parsed_result = parse_ph(PH_NAME)
-    write_to_file(
-        RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
-    )
+    parsed_result: Dict[str, str | Any] = {}
+    if not os.path.exists(RESULT_JSON_PATH):
+        parsed_result = parse_ph(PH_NAME)
+        write_to_file(
+            RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
+        )
+    else:
+        with open(RESULT_JSON_PATH, 'r') as f:
+            parsed_result = json.load(f)
     generate_pdf(parsed_result["img_url_list"])
 
 
