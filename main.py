@@ -13,9 +13,11 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 BASE_URL = "https://telegra.ph"
 CACHE_DIR = "./cache"
 OUTPUT_DIR = "./output"
-PH_NAME = "Nukunuku-Mini-Holes-08-18-2"
-RESULT_JSON_PATH = f"{OUTPUT_DIR}/{PH_NAME}.json"
-OUT_PDF_PATH = f"{OUTPUT_DIR}/{PH_NAME}.pdf"
+PH_NAME_LIST = [
+    "Barbara-08-23-4",
+    "Nukunuku-Mini-Holes-08-18-2",
+]
+CLEAR_CACHE = True
 
 
 def write_to_file(file_path: str, data: str) -> None:
@@ -85,7 +87,7 @@ def download_img(img_url: str) -> None:
     print()
 
 
-def generate_pdf(img_urls: List[str]) -> None:
+def generate_pdf(img_urls: List[str], ph_name: str) -> None:
     total = len(img_urls)
     print("start download all images")
     for i, img_url in enumerate(img_urls):
@@ -100,13 +102,27 @@ def generate_pdf(img_urls: List[str]) -> None:
     for img_path in file_list:
         print(img_path)
         images.append(Image.open(img_path).convert("RGB"))
+    out_pdf_path: str = os.path.join(OUTPUT_DIR, f"{ph_name}.pdf")
     images[0].save(
-        OUT_PDF_PATH, resolution=100.0, save_all=True, append_images=images[1:]
+        out_pdf_path, resolution=100.0, save_all=True, append_images=images[1:]
     )
-    clean_flag = input("Clean all cache? y/n")
-    if clean_flag.lower() == "y":
+    if CLEAR_CACHE:
         for img_path in file_list:
             os.remove(img_path)
+
+
+def process_ph(ph_name: str) -> None:
+    parsed_result: Dict[str, str | Any] = {}
+    result_json_path = os.path.join(OUTPUT_DIR, f"{ph_name}.json")
+    if not os.path.exists(result_json_path):
+        parsed_result = parse_ph(ph_name)
+        write_to_file(
+            result_json_path, json.dumps(parsed_result, ensure_ascii=False, indent=4)
+        )
+    else:
+        with open(result_json_path, "r") as f:
+            parsed_result = json.load(f)
+    generate_pdf(parsed_result["img_url_list"], ph_name)
 
 
 def main() -> None:
@@ -114,16 +130,9 @@ def main() -> None:
         os.mkdir(CACHE_DIR)
     if not os.path.exists(OUTPUT_DIR):
         os.mkdir(OUTPUT_DIR)
-    parsed_result: Dict[str, str | Any] = {}
-    if not os.path.exists(RESULT_JSON_PATH):
-        parsed_result = parse_ph(PH_NAME)
-        write_to_file(
-            RESULT_JSON_PATH, json.dumps(parsed_result, ensure_ascii=False, indent=4)
-        )
-    else:
-        with open(RESULT_JSON_PATH, 'r') as f:
-            parsed_result = json.load(f)
-    generate_pdf(parsed_result["img_url_list"])
+    for ph_name in PH_NAME_LIST:
+        print(f"Processing {ph_name}")
+        process_ph(ph_name)
 
 
 if __name__ == "__main__":
