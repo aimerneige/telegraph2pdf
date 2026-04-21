@@ -2,7 +2,7 @@ import os
 import json
 import zlib
 import requests
-from PIL import Image, ImageFile
+from PIL import Image, ImageFile, UnidentifiedImageError
 from requests import Response
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any
@@ -105,8 +105,15 @@ def download_img(img_url: str) -> None:
     file_name = img_url.split("/")[-1]
     file_path = os.path.join(CACHE_DIR, file_name)
     if os.path.isfile(file_path):
-        print(f"File {file_path} exists! skipped")
-        return
+        if is_valid_image(file_path):
+            print(f"File {file_path} exists! skipped")
+            return
+        print(f"File {file_path} is invalid, redownloading")
+        os.remove(file_path)
+
+    temp_path = f"{file_path}.part"
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
     with requests.get(img_url, headers=DEFAULT_HEADERS, stream=True, timeout=60) as response:
         try:
@@ -116,7 +123,7 @@ def download_img(img_url: str) -> None:
 
         total_size = int(response.headers.get("content-length", 0))
         downloaded = 0
-        with open(file_path, "wb") as f:
+        with open(temp_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024 * 64):
                 if not chunk:
                     continue
@@ -125,7 +132,20 @@ def download_img(img_url: str) -> None:
                 if total_size > 0:
                     progress = downloaded * 100.0 / total_size
                     print(f"\rdownloading: {progress:5.1f}%", end="")
+    if not is_valid_image(temp_path):
+        os.remove(temp_path)
+        raise RuntimeError(f"Downloaded file is not a valid image: {img_url}")
+    os.replace(temp_path, file_path)
     print()
+
+
+def is_valid_image(file_path: str) -> bool:
+    try:
+        with Image.open(file_path) as image:
+            image.verify()
+        return True
+    except (FileNotFoundError, OSError, UnidentifiedImageError):
+        return False
 
 
 def save_images_as_pdf(image_paths: List[str], out_pdf_path: str) -> None:
@@ -212,9 +232,15 @@ def generate_pdf(img_urls: List[str], ph_name: str) -> None:
         download_img(img_url)
     print("image download complete")
     print("start merging pdf file")
-    file_list = [
-        os.path.join(CACHE_DIR, img_url.split("/")[-1]) for img_url in img_urls
-    ]
+    file_list: List[str] = []
+    for img_url in img_urls:
+        img_path = os.path.join(CACHE_DIR, img_url.split("/")[-1])
+        if not is_valid_image(img_path):
+            print(f"Cached image invalid before merge, redownloading: {img_path}")
+            if os.path.exists(img_path):
+                os.remove(img_path)
+            download_img(img_url)
+        file_list.append(img_path)
     out_pdf_path: str = os.path.join(OUTPUT_DIR, f"{ph_name}.pdf")
     save_images_as_pdf(file_list, out_pdf_path)
     if CLEAR_CACHE:
