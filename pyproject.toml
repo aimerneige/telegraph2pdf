@@ -1,0 +1,12 @@
+[project]
+name = "telegraph2pdf"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "lxml>=6.1.0",
+    "pillow>=12.2.0",
+    "requests>=2.33.1",
+]
