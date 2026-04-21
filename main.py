@@ -18,6 +18,13 @@ PH_NAME_LIST = [
     "Barbara-08-23-4",
     "Nukunuku-Mini-Holes-08-18-2",
     "僕らのラブライブ-15-SHAMROCK-おぎ-昨日の僕と明日の君-ラブライブ-中国翻訳-Preview-07-12",
+    "ぼっちざろっくぼ喜多虹マンガ-Preview-04-19-3",
+    "僕らのラブライブ-6-蒼井ホログラム-めの-クリスマスマジック-ラブライブ-中国翻訳-Preview-03-18",
+    "C92-Do-well--ながれぼし-夏風ベクレムト-ラブライブラブライブ-サンシャイン-中国翻訳-Preview-04-08",
+    "C102-悠遠monochrome-ゆうえむ-絡まるリボンを抱きしめて-ラブライブ-中国翻訳-Preview-03-22",
+    "さんしきすみれ-モルゲン-きょうはわたしがするんです-ラブライブ-中国翻訳-DL版-Preview-03-22",
+    "僕らのラブライブ-13-towai-Hzk-Yr-ラブライブ-サンシャイン-中国翻訳-Preview-03-19",
+    "アクアマリンドリーム5th-帰宅時間-きたく-サクラホリック-ラブライブ-サンシャイン-中国翻訳-Preview-03-08-2"
 ]
 CLEAR_CACHE = True
 DEFAULT_HEADERS = {
@@ -121,73 +128,80 @@ def download_img(img_url: str) -> None:
     print()
 
 
-def save_images_as_pdf(images: List[Image.Image], out_pdf_path: str) -> None:
-    pdf_parts: List[bytes] = [b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"]
-    offsets: List[int] = [0]
-    objects: List[bytes] = []
+def save_images_as_pdf(image_paths: List[str], out_pdf_path: str) -> None:
+    object_offsets: Dict[int, int] = {}
     page_ids: List[int] = []
     next_object_id = 3
 
-    for image in images:
-        rgb_image = image.convert("RGB")
-        width, height = rgb_image.size
-        compressed_data = zlib.compress(rgb_image.tobytes())
-
-        content_stream = f"q\n{width} 0 0 {height} 0 0 cm\n/Im0 Do\nQ\n".encode("ascii")
-        image_object_id = next_object_id
-        content_object_id = next_object_id + 1
-        page_object_id = next_object_id + 2
-        next_object_id += 3
-
-        image_object = (
-            f"{image_object_id} 0 obj\n"
-            f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
-            f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
-            f"/Length {len(compressed_data)} >>\nstream\n".encode("ascii")
-            + compressed_data
-            + b"\nendstream\nendobj\n"
-        )
-        content_object = (
-            f"{content_object_id} 0 obj\n"
-            f"<< /Length {len(content_stream)} >>\nstream\n".encode("ascii")
-            + content_stream
-            + b"endstream\nendobj\n"
-        )
-        page_object = (
-            f"{page_object_id} 0 obj\n"
-            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] "
-            f"/Resources << /XObject << /Im0 {image_object_id} 0 R >> >> "
-            f"/Contents {content_object_id} 0 R >>\nendobj\n".encode("ascii")
-        )
-
-        objects.extend([image_object, content_object, page_object])
-        page_ids.append(page_object_id)
-
-    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
-    catalog_object = b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-    pages_object = (
-        f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>\nendobj\n".encode(
-            "ascii"
-        )
-    )
-    objects = [catalog_object, pages_object] + objects
-
-    for obj in objects:
-        offsets.append(sum(len(part) for part in pdf_parts))
-        pdf_parts.append(obj)
-
-    xref_offset = sum(len(part) for part in pdf_parts)
-    xref_lines = [f"xref\n0 {len(offsets)}\n", "0000000000 65535 f \n"]
-    xref_lines.extend(f"{offset:010d} 00000 n \n" for offset in offsets[1:])
-    trailer = (
-        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\n"
-        f"startxref\n{xref_offset}\n%%EOF\n"
-    )
-    pdf_parts.append("".join(xref_lines).encode("ascii"))
-    pdf_parts.append(trailer.encode("ascii"))
+    def write_object(f, object_id: int, payload: bytes) -> None:
+        object_offsets[object_id] = f.tell()
+        f.write(f"{object_id} 0 obj\n".encode("ascii"))
+        f.write(payload)
+        f.write(b"\nendobj\n")
 
     with open(out_pdf_path, "wb") as f:
-        f.write(b"".join(pdf_parts))
+        f.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+
+        for index, img_path in enumerate(image_paths, start=1):
+            print(f"merging {index}/{len(image_paths)} {img_path}")
+            with Image.open(img_path) as image:
+                rgb_image = image.convert("RGB")
+                width, height = rgb_image.size
+                compressed_data = zlib.compress(rgb_image.tobytes())
+
+            image_object_id = next_object_id
+            content_object_id = next_object_id + 1
+            page_object_id = next_object_id + 2
+            next_object_id += 3
+
+            image_payload = (
+                f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+                f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
+                f"/Length {len(compressed_data)} >>\nstream\n".encode("ascii")
+            )
+            write_object(
+                f,
+                image_object_id,
+                image_payload + compressed_data + b"\nendstream",
+            )
+
+            content_stream = (
+                f"q\n{width} 0 0 {height} 0 0 cm\n/Im0 Do\nQ\n".encode("ascii")
+            )
+            content_payload = (
+                f"<< /Length {len(content_stream)} >>\nstream\n".encode("ascii")
+                + content_stream
+                + b"endstream"
+            )
+            write_object(f, content_object_id, content_payload)
+
+            page_payload = (
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] "
+                f"/Resources << /XObject << /Im0 {image_object_id} 0 R >> >> "
+                f"/Contents {content_object_id} 0 R >>".encode("ascii")
+            )
+            write_object(f, page_object_id, page_payload)
+            page_ids.append(page_object_id)
+
+        pages_payload = (
+            f"<< /Type /Pages /Kids [{' '.join(f'{page_id} 0 R' for page_id in page_ids)}] "
+            f"/Count {len(page_ids)} >>".encode("ascii")
+        )
+        write_object(f, 2, pages_payload)
+        write_object(f, 1, b"<< /Type /Catalog /Pages 2 0 R >>")
+
+        max_object_id = next_object_id - 1
+        xref_offset = f.tell()
+        f.write(f"xref\n0 {max_object_id + 1}\n".encode("ascii"))
+        f.write(b"0000000000 65535 f \n")
+        for object_id in range(1, max_object_id + 1):
+            f.write(f"{object_offsets[object_id]:010d} 00000 n \n".encode("ascii"))
+
+        trailer = (
+            f"trailer\n<< /Size {max_object_id + 1} /Root 1 0 R >>\n"
+            f"startxref\n{xref_offset}\n%%EOF\n"
+        )
+        f.write(trailer.encode("ascii"))
 
 
 def generate_pdf(img_urls: List[str], ph_name: str) -> None:
@@ -201,12 +215,8 @@ def generate_pdf(img_urls: List[str], ph_name: str) -> None:
     file_list = [
         os.path.join(CACHE_DIR, img_url.split("/")[-1]) for img_url in img_urls
     ]
-    images: List[ImageFile.ImageFile] = []
-    for img_path in file_list:
-        print(img_path)
-        images.append(Image.open(img_path).convert("RGB"))
     out_pdf_path: str = os.path.join(OUTPUT_DIR, f"{ph_name}.pdf")
-    save_images_as_pdf(images, out_pdf_path)
+    save_images_as_pdf(file_list, out_pdf_path)
     if CLEAR_CACHE:
         for img_path in file_list:
             os.remove(img_path)
@@ -215,6 +225,10 @@ def generate_pdf(img_urls: List[str], ph_name: str) -> None:
 def process_ph(ph_name: str) -> None:
     parsed_result: Dict[str, str | Any] = {}
     safe_name = os.path.splitext(os.path.basename(ph_name))[0]
+    out_pdf_path = os.path.join(OUTPUT_DIR, f"{safe_name}.pdf")
+    if os.path.exists(out_pdf_path):
+        print(f"Skip {safe_name}: {out_pdf_path} already exists")
+        return
     result_json_path = os.path.join(OUTPUT_DIR, f"{safe_name}.json")
     if not os.path.exists(result_json_path):
         parsed_result = parse_ph(ph_name)
