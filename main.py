@@ -1,19 +1,22 @@
 import os
 import json
 import zlib
+import hashlib
+import re
 import requests
 from PIL import Image, ImageFile, UnidentifiedImageError
 from requests import Response
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 from bs4.element import ResultSet, Tag
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, unquote
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 BASE_URL = "https://telegra.ph"
 CACHE_DIR = "./cache"
 OUTPUT_DIR = "./output"
+MAX_FILE_STEM_BYTES = 180
 PH_NAME_LIST = [
     "Barbara-08-23-4",
     "Nukunuku-Mini-Holes-08-18-2",
@@ -24,7 +27,10 @@ PH_NAME_LIST = [
     "C102-悠遠monochrome-ゆうえむ-絡まるリボンを抱きしめて-ラブライブ-中国翻訳-Preview-03-22",
     "さんしきすみれ-モルゲン-きょうはわたしがするんです-ラブライブ-中国翻訳-DL版-Preview-03-22",
     "僕らのラブライブ-13-towai-Hzk-Yr-ラブライブ-サンシャイン-中国翻訳-Preview-03-19",
-    "アクアマリンドリーム5th-帰宅時間-きたく-サクラホリック-ラブライブ-サンシャイン-中国翻訳-Preview-03-08-2"
+    "アクアマリンドリーム5th-帰宅時間-きたく-サクラホリック-ラブライブ-サンシャイン-中国翻訳-Preview-03-08-2",
+    "https://telegra.ph/%E5%83%95%E3%82%89%E3%81%AE%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-50-MEOPPAP-%E4%BE%91%E3%81%A1%E3%82%83%E3%82%93%E3%81%AF%E3%83%91%E3%83%B3%E3%83%84%E3%82%92%E6%AD%BB%E5%AE%88%E3%81%97%E3%81%9F%E3%81%84-%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-%E8%99%B9%E3%83%B6%E5%92%B2%E5%AD%A6%E5%9C%92%E3%82%B9%E3%82%AF%E3%83%BC%E3%83%AB%E3%82%A2%E3%82%A4%E3%83%89%E3%83%AB%E5%90%8C%E5%A5%BD%E4%BC%9A-%E4%B8%AD%E5%9B%BD%E7%BF%BB%E8%A8%B3-Preview-06-23",
+    "https://telegra.ph/%E5%83%95%E3%82%89%E3%81%AE%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-28-%E5%B8%B0%E5%AE%85%E6%99%82%E9%96%93-%E3%81%8D%E3%81%9F%E3%81%8F-Rainbow-Memories-2-%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-%E8%99%B9%E3%83%B6%E5%92%B2%E5%AD%A6%E5%9C%92%E3%82%B9%E3%82%AF%E3%83%BC%E3%83%AB%E3%82%A2%E3%82%A4%E3%83%89%E3%83%AB%E5%90%8C%E5%A5%BD%E4%BC%9A-01-17",
+    "https://telegra.ph/%E5%83%95%E3%82%89%E3%81%AE%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-7-%E3%81%BA%E3%82%8D%E3%82%8A%E9%A3%AF-%E3%81%AB%E3%81%8E%E3%82%8A%E3%82%81%E3%81%97-%E3%82%A6%E3%82%B5%E3%82%AE%E3%81%AA%E3%82%AB%E3%83%8E%E3%82%B8%E3%83%A7-%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96-%E4%B8%AD%E5%9B%BD%E7%BF%BB%E8%A8%B3-01-19",
 ]
 CLEAR_CACHE = True
 DEFAULT_HEADERS = {
@@ -47,6 +53,32 @@ def write_to_file(file_path: str, data: str) -> None:
 def read_from_file(file_path: str) -> str:
     with open(file_path, "r") as f:
         return f.read()
+
+
+def trim_to_utf8_bytes(text: str, max_bytes: int) -> str:
+    return text.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore").rstrip()
+
+
+def safe_file_stem(source: str) -> str:
+    is_url = source.startswith(("http://", "https://"))
+    source_path = urlparse(source).path if is_url else source
+    raw_name = os.path.splitext(os.path.basename(source_path))[0]
+    decoded_name = unquote(raw_name)
+    cleaned_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", decoded_name)
+    cleaned_name = re.sub(r"\s+", " ", cleaned_name).strip(" .")
+    if not cleaned_name:
+        cleaned_name = "telegraph"
+    suffix = (
+        f"-{hashlib.sha256(source.encode('utf-8')).hexdigest()[:8]}"
+        if is_url
+        else ""
+    )
+    if len(f"{cleaned_name}{suffix}".encode("utf-8")) <= MAX_FILE_STEM_BYTES:
+        return f"{cleaned_name}{suffix}"
+    if not suffix:
+        return trim_to_utf8_bytes(cleaned_name, MAX_FILE_STEM_BYTES)
+    trimmed_bytes = MAX_FILE_STEM_BYTES - len(suffix.encode("utf-8"))
+    return f"{trim_to_utf8_bytes(cleaned_name, trimmed_bytes)}{suffix}"
 
 
 def curl_url_text(url: str) -> str:
@@ -250,7 +282,7 @@ def generate_pdf(img_urls: List[str], ph_name: str) -> None:
 
 def process_ph(ph_name: str) -> None:
     parsed_result: Dict[str, str | Any] = {}
-    safe_name = os.path.splitext(os.path.basename(ph_name))[0]
+    safe_name = safe_file_stem(ph_name)
     out_pdf_path = os.path.join(OUTPUT_DIR, f"{safe_name}.pdf")
     if os.path.exists(out_pdf_path):
         print(f"Skip {safe_name}: {out_pdf_path} already exists")
