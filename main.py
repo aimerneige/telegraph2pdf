@@ -127,13 +127,13 @@ def parse_ph(source: str) -> Dict[str, str | Any]:
     return parsed_result
 
 
-def download_img(img_url: str) -> None:
+def download_img(img_url: str) -> bool:
     file_name = img_url.split("/")[-1]
     file_path = os.path.join(CACHE_DIR, file_name)
     if os.path.isfile(file_path):
         if is_valid_image(file_path):
             print(f"File {file_path} exists! skipped")
-            return
+            return True
         print(f"File {file_path} is invalid, redownloading")
         os.remove(file_path)
 
@@ -141,28 +141,35 @@ def download_img(img_url: str) -> None:
     if os.path.exists(temp_path):
         os.remove(temp_path)
 
-    with requests.get(img_url, headers=DEFAULT_HEADERS, stream=True, timeout=60) as response:
-        try:
+    try:
+        with requests.get(img_url, headers=DEFAULT_HEADERS, stream=True, timeout=60) as response:
             response.raise_for_status()
-        except requests.HTTPError as exc:
-            raise RuntimeError(f"Failed to download image: {img_url} ({response.status_code})") from exc
 
-        total_size = int(response.headers.get("content-length", 0))
-        downloaded = 0
-        with open(temp_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024 * 64):
-                if not chunk:
-                    continue
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0:
-                    progress = downloaded * 100.0 / total_size
-                    print(f"\rdownloading: {progress:5.1f}%", end="")
+            total_size = int(response.headers.get("content-length", 0))
+            downloaded = 0
+            with open(temp_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 64):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress = downloaded * 100.0 / total_size
+                        print(f"\rdownloading: {progress:5.1f}%", end="")
+    except (OSError, ValueError, requests.RequestException) as exc:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        print()
+        print(f"Skip image download failed: {img_url} ({exc})")
+        return False
     if not is_valid_image(temp_path):
         os.remove(temp_path)
-        raise RuntimeError(f"Downloaded file is not a valid image: {img_url}")
+        print()
+        print(f"Skip invalid image: {img_url}")
+        return False
     os.replace(temp_path, file_path)
     print()
+    return True
 
 
 def is_valid_image(file_path: str) -> bool:
@@ -253,20 +260,16 @@ def save_images_as_pdf(image_paths: List[str], out_pdf_path: str) -> None:
 def generate_pdf(img_urls: List[str], ph_name: str) -> None:
     total = len(img_urls)
     print("start download all images")
+    file_list: List[str] = []
     for i, img_url in enumerate(img_urls):
         print(f"{i}/{total} {img_url}")
-        download_img(img_url)
+        if download_img(img_url):
+            file_list.append(os.path.join(CACHE_DIR, img_url.split("/")[-1]))
     print("image download complete")
+    if not file_list:
+        print("No valid images downloaded, skip pdf generation")
+        return
     print("start merging pdf file")
-    file_list: List[str] = []
-    for img_url in img_urls:
-        img_path = os.path.join(CACHE_DIR, img_url.split("/")[-1])
-        if not is_valid_image(img_path):
-            print(f"Cached image invalid before merge, redownloading: {img_path}")
-            if os.path.exists(img_path):
-                os.remove(img_path)
-            download_img(img_url)
-        file_list.append(img_path)
     out_pdf_path: str = os.path.join(OUTPUT_DIR, f"{ph_name}.pdf")
     save_images_as_pdf(file_list, out_pdf_path)
     if CLEAR_CACHE:
